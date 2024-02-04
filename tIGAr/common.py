@@ -1166,7 +1166,16 @@ class ExtractedSpline(object):
         """
         #b = PETScVector()
         #assemble(form, tensor=b)
-        b = assemble(form)
+        if parameters["form_compiler"]["representation"]=='tsfc':
+            """
+            TSFC does not support facet integrals over hex/ quad elements
+            Change to UFLACS for b vector.
+            """
+            parameters["form_compiler"]["representation"]=='uflacs'
+            b = assemble(form)
+            parameters["form_compiler"]["representation"]=='tsfc'
+        else:
+            b = assemble(form)
 
         MTb = self.extractVector(b,applyBCs=applyBCs)
 
