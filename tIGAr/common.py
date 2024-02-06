@@ -1171,9 +1171,11 @@ class ExtractedSpline(object):
             TSFC does not support facet integrals over hex/ quad elements
             Change to UFLACS for b vector.
             """
-            parameters["form_compiler"]["representation"]=='uflacs'
+            print("Switching to UFLACS for assembling b")
+            parameters["form_compiler"]["representation"] = 'uflacs'
             b = assemble(form)
-            parameters["form_compiler"]["representation"]=='tsfc'
+            print("Switching back to TSFC after assembling b")
+            parameters["form_compiler"]["representation"] = 'tsfc'
         else:
             b = assemble(form)
 
