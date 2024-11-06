@@ -1312,7 +1312,7 @@ class ExtractedSpline(object):
         self.relativeTolerance = relativeTolerance
         self.linearSolver = linearSolver
 
-    def solveNonlinearVariationalProblem(self,residualForm,J,u,
+    def solveNonlinearVariationalProblem_original(self,residualForm,J,u,
                                          referenceError=None,
                                          igaDoFs=None):
         """
@@ -1352,6 +1352,64 @@ class ExtractedSpline(object):
             du = Function(self.V)
             igaIncrement = self.solveLinearSystem(MTAM,MTb,du)
             u.assign(u-du)
+            if(returningDoFs):
+                igaDoFs -= igaIncrement
+        if(not converged):
+            print("ERROR: Nonlinear solver failed to converge.")
+            exit()
+
+    def solveNonlinearVariationalProblem(self,residualForm,J,u,
+                                         referenceError=None,
+                                         igaDoFs=None):
+        """
+        Solves a nonlinear variational problem with residual given by 
+        ``residualForm``.  ``J`` is the functional derivative of 
+        the residual w.r.t. the solution, ``u``, or some user-defined
+        approximation thereof.  Optionally, a given ``referenceError`` can be
+        used instead of the initial residual norm to compute relative errors.
+        Optionally, an initial guess can be provided directly as a DOLFIN
+        ``PETScVector`` of IGA degrees of freedom, which will override
+        whatever is in the vector of FE coefficients for ``u`` as the
+        initial guess.  If this argument is passed, it is also overwritten 
+        by the IGA degrees of freedom for the nonlinear problem's solution.  
+
+        Just for testing and comparing to the classical FEniCS fem implementation
+        we have implemented calculation of the current norm and relative norm
+        in a way which directly calculates these from u and du.
+
+        This is in no way intended to replace the original function and is just
+        meant for testing purposes in our nonlinear code.
+
+        referenceError has no meaning here.
+        """
+        if(MPI.rank(self.comm) == 0):
+            print(f"You are using a butchered version of the NonLinearVariationalProblem function!")
+            sys.stdout.flush()
+        
+        returningDoFs = not isinstance(igaDoFs,type(None))
+        if(returningDoFs):
+            # Overwrite content of u with extraction of igaDoFs.
+            u.vector().set_local(((self.M)*igaDoFs).get_local())
+            as_backend_type(u.vector()).vec().ghostUpdate()
+            as_backend_type(u.vector()).vec().assemble()
+            
+        # Newton iteration loop:
+        converged = False
+        for i in range(0,self.maxIters):
+            MTAM,MTb = self.assembleLinearSystem(J,residualForm)
+            du = Function(self.V)
+            igaIncrement = self.solveLinearSystem(MTAM,MTb,du)
+            u.assign(u-du)
+
+            currentNorm = norm(du)
+            referenceError = norm(u)
+            relativeNorm = currentNorm / referenceError
+            if(MPI.rank(self.comm) == 0):
+                print(f"Solver iteration: {i}, r (abs): {currentNorm}, r(rel): {relativeNorm}")
+                sys.stdout.flush()
+            if(relativeNorm < self.relativeTolerance):
+                converged = True
+                break
             if(returningDoFs):
                 igaDoFs -= igaIncrement
         if(not converged):
